@@ -160,6 +160,18 @@ if (!fs.existsSync(manifestPath)) {
     checkPinnedReference(image, `manifest.containers.${key}`);
   }
 
+  const awsOnly = manifest.awsOnly ?? {};
+  const awsOnlyContainers = awsOnly.containers ?? {};
+  for (const [key, image] of Object.entries(awsOnlyContainers)) {
+    checkPinnedReference(image, `manifest.awsOnly.containers.${key}`);
+  }
+  if (awsOnly.region && !/^[a-z]{2}-[a-z]+-\d$/.test(awsOnly.region)) {
+    fail(`manifest.awsOnly.region is not a valid AWS region: ${awsOnly.region}`);
+  }
+  if (awsOnly.bedrockModel && !/^[a-z0-9.-]+:[a-z0-9.-]+$/.test(awsOnly.bedrockModel)) {
+    fail(`manifest.awsOnly.bedrockModel is not a valid model id: ${awsOnly.bedrockModel}`);
+  }
+
   if (releaseMode) {
     for (const [key, digest] of Object.entries(digests)) {
       if (!isSha256Digest(digest)) {
@@ -195,6 +207,29 @@ if (!fs.existsSync(manifestPath)) {
     for (const image of composeImages) {
       if (!Object.values(containers).includes(image)) {
         fail(`docker-compose.yml uses an image that is not in manifest.containers: ${image}`);
+      }
+    }
+  }
+
+  const overlayComposeFiles = walkFiles(repoPath("deploy")).filter((file) =>
+    /^docker-compose.*\.ya?ml$/.test(path.basename(file))
+  );
+  for (const overlayFile of overlayComposeFiles) {
+    const label = relativeToRepo(overlayFile);
+    const overlayImages = [...readText(overlayFile).matchAll(/^\s*image:\s*["']?([^"'\s#]+)["']?\s*(?:#.*)?$/gm)].map(
+      (match) => match[1]
+    );
+    for (const image of overlayImages) {
+      checkPinnedReference(image, `${label} image`);
+      if (!Object.values(containers).includes(image) && !Object.values(awsOnlyContainers).includes(image)) {
+        fail(`${label} uses an image that is not pinned in the manifest: ${image}`);
+      }
+    }
+    if (label === "deploy/aws/docker-compose.aws.yml") {
+      for (const image of Object.values(awsOnlyContainers)) {
+        if (!overlayImages.includes(image)) {
+          fail(`${label} does not use the manifest-pinned image ${image}.`);
+        }
       }
     }
   }

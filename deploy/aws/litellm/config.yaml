@@ -1,0 +1,21 @@
+# LiteLLM proxy exposing an OpenAI-compatible endpoint backed by Amazon Bedrock.
+#
+# The model alias "gpt-4o-mini" matches windmill/flows/safi_assistant.flow.json,
+# so the Windmill Flow keeps working unchanged. The proxy authenticates to
+# Bedrock with the EC2 instance profile; no static AWS keys live in this file.
+
+model_list:
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: bedrock/amazon.nova-lite-v1:0
+      aws_region_name: us-east-1
+  - model_name: safi-assistant
+    litellm_params:
+      model: bedrock/amazon.nova-lite-v1:0
+      aws_region_name: us-east-1
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

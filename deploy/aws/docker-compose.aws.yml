@@ -1,0 +1,126 @@
+# AWS-only overlay for SOW 018.
+#
+# Use with the base compose file:
+#   docker compose -f docker-compose.yml -f deploy/aws/docker-compose.aws.yml up -d
+#
+# It adds a self-hosted Supabase (Postgres + GoTrue + PostgREST) and a LiteLLM
+# proxy backed by Amazon Bedrock. Caddy becomes the single origin for both the
+# platform and the self-hosted Supabase API. No third-party SaaS is required.
+#
+# This is a deviation from SOW 018 (which mandates a managed Supabase project and
+# excludes customer AWS). See deploy/aws/README.md.
+
+services:
+  supabase_db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  supabase_auth:
+    image: supabase/gotrue:v2.197.0
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      PORT: "9999"
+      API_EXTERNAL_URL: https://${SUPABASE_HOST:?set SUPABASE_HOST}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@supabase_db:5432/postgres
+      GOTRUE_SITE_URL: https://${PLATFORM_HOST}
+      GOTRUE_URI_ALLOW_LIST: https://${PLATFORM_HOST}/*
+      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_LOG_LEVEL: info
+    depends_on:
+      supabase_db:
+        condition: service_healthy
+    expose:
+      - "9999"
+
+  # Waits for GoTrue to create auth.users, adds the Supabase roles and auth.uid()
+  # helpers that vanilla Postgres lacks, then applies the SAFI migration and grants.
+  supabase_bootstrap:
+    image: postgres:16.4-alpine
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD:?set AUTHENTICATOR_PASSWORD}
+    volumes:
+      - ./deploy/aws/supabase/bootstrap.sh:/bootstrap.sh:ro
+      - ./supabase/migrations:/migrations:ro
+    entrypoint: ["/bin/sh", "/bootstrap.sh"]
+    depends_on:
+      supabase_db:
+        condition: service_healthy
+      supabase_auth:
+        condition: service_started
+
+  supabase_rest:
+    image: postgrest/postgrest:v16.5
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@supabase_db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_SERVER_PORT: "3000"
+    depends_on:
+      supabase_db:
+        condition: service_healthy
+      supabase_bootstrap:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+
+  litellm:
+    image: litellm/litellm:v1.108.0
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY}
+      LITELLM_LOG: INFO
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - ./deploy/aws/litellm/config.yaml:/app/config.yaml:ro
+    expose:
+      - "4000"
+
+  trusted_api:
+    environment:
+      # Internal single-origin gateway handled by the Caddy "web" container.
+      SUPABASE_URL: http://supabase_gateway:8000
+      PUBLIC_SUPABASE_URL: https://${SUPABASE_HOST:?set SUPABASE_HOST}
+    depends_on:
+      supabase_rest:
+        condition: service_started
+      litellm:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/aws/Dockerfile.edge
+    environment:
+      SUPABASE_HOST: ${SUPABASE_HOST:?set SUPABASE_HOST}
+    networks:
+      default:
+        aliases:
+          - supabase_gateway
+
+volumes:
+  supabase_db_data:

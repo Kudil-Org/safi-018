@@ -1,4 +1,4 @@
-import { loadDotEnv, requiredEnv, stripTrailingSlash } from "./lib/common.mjs";
+import { loadDotEnv, optionalEnv, requiredEnv, stripTrailingSlash } from "./lib/common.mjs";
 
 loadDotEnv();
 
@@ -89,7 +89,7 @@ async function ensureUser(supabaseUrl, serviceRoleKey, label) {
 }
 
 async function main() {
-  const supabaseUrl = stripTrailingSlash(requiredEnv("SUPABASE_URL"));
+  const supabaseUrl = stripTrailingSlash(optionalEnv("PUBLIC_SUPABASE_URL") ?? requiredEnv("SUPABASE_URL"));
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   const accounts = [
     await ensureUser(supabaseUrl, serviceRoleKey, "A"),

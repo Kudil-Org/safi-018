@@ -6,6 +6,7 @@ dotenv.config({ path: process.env.SAFI_ENV_FILE ?? "../../.env" });
 const EnvSchema = z.object({
   SAFI_API_PORT: z.coerce.number().int().positive().default(8080),
   SUPABASE_URL: z.string().url(),
+  PUBLIC_SUPABASE_URL: z.string().url().optional(),
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SAFI_CONTEXT_SECRET: z.string().min(32),
@@ -40,6 +41,7 @@ export const config = {
   release: env.SAFI_RELEASE,
   supabase: {
     url: env.SUPABASE_URL,
+    publicUrl: env.PUBLIC_SUPABASE_URL ?? env.SUPABASE_URL,
     anonKey: env.SUPABASE_ANON_KEY,
     serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY
   },

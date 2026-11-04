@@ -22,7 +22,7 @@ apiRouter.get("/healthz", (_req, res) => {
 
 apiRouter.get("/config", (_req, res) => {
   res.json({
-    supabaseUrl: config.supabase.url,
+    supabaseUrl: config.supabase.publicUrl,
     supabaseAnonKey: config.supabase.anonKey,
     platformUrl: config.platformUrl,
     release: config.release,

@@ -84,6 +84,16 @@ DNS/TLS:
 - `PLATFORM_HOST` -> Caddy -> SPA static + `/api` trusted API + `/wm` Windmill.
 - `WINDMILL_HOST` -> optional direct Windmill access for administrators.
 - `BOOKING_HOST` -> Calnode admin/public booking pages.
+- `SUPABASE_HOST` -> only with the AWS-only overlay (self-hosted Supabase API).
+
+### AWS-only variant (deviation)
+
+`deploy/aws/` deploys the pilot on a single EC2 host with self-hosted Supabase
+and Amazon Bedrock (Nova Lite) through LiteLLM. It exists because the operator
+asked for everything on AWS, but it **deviates from SOW 018**: section 3/E11
+excludes customer AWS and the SOW assumes a managed Supabase project and an
+approved LLM key. Treat it as a non-SOW variant until a change order exists. See
+`deploy/aws/README.md`.
 
 Chat traffic uses `https://${PLATFORM_HOST}/api/w/...`. The trusted API verifies the Supabase session and injects the shared Windmill chat token server-side. The browser never receives that token.
 

@@ -69,6 +69,21 @@ artifact:
   state_kind: "checklist"
   versioning: "monotonic integer, immutable append-only history"
 
+aws_only_pilot:
+  enabled: false
+  note: "Optional operator-requested variant. Deviates from SOW 018; see deploy/aws/README.md."
+  region: "us-east-1"
+  supabase:
+    mode: "self-hosted Postgres + GoTrue + PostgREST in Docker Compose"
+    public_url: "https://supabase.example.com"
+  llm:
+    proxy: "LiteLLM"
+    model_alias: "gpt-4o-mini"
+    bedrock_model: "amazon.nova-lite-v1:0"
+  load_balancer: "none (single EC2 host, Caddy)"
+  supersedes_exclusions:
+    - customer_aws
+
 exclusions:
   customer_aws: false
   vercel: false

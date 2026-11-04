@@ -1,0 +1,81 @@
+{
+	email {$CADDY_EMAIL}
+}
+
+# Public platform host: SPA, trusted API and Windmill passthrough.
+{$PLATFORM_HOST} {
+	encode zstd gzip
+	handle /api/* {
+		reverse_proxy trusted_api:8080
+	}
+	handle /internal/* {
+		respond "Not found" 404
+	}
+	handle /wm/* {
+		uri strip_prefix /wm
+		reverse_proxy windmill_server:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+	header {
+		Referrer-Policy no-referrer
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+	}
+}
+
+# Optional direct Windmill admin access.
+{$WINDMILL_HOST} {
+	reverse_proxy windmill_server:8000
+}
+
+# Calnode booking surface.
+{$BOOKING_HOST} {
+	reverse_proxy calnode:3000
+}
+
+# Public self-hosted Supabase API used by the browser. The platform and the
+# Supabase API share one origin so session storage and CORS stay simple.
+{$SUPABASE_HOST} {
+	encode zstd gzip
+	@preflight method OPTIONS
+	respond @preflight 204
+	header {
+		Access-Control-Allow-Origin "https://{$PLATFORM_HOST}"
+		Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		Access-Control-Allow-Headers "authorization, apikey, content-type, x-client-info, x-supabase-api-version, prefer, accept-profile, content-profile"
+		Access-Control-Max-Age "86400"
+		Vary "Origin"
+		X-Content-Type-Options nosniff
+	}
+	handle /auth/v1/* {
+		uri strip_prefix /auth/v1
+		reverse_proxy supabase_auth:9999
+	}
+	handle /rest/v1/* {
+		uri strip_prefix /rest/v1
+		reverse_proxy supabase_rest:3000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
+
+# Internal single-origin gateway: trusted_api calls http://supabase_gateway:8000
+# so it never needs the public hostname or egress.
+http://:8000 {
+	handle /auth/v1/* {
+		uri strip_prefix /auth/v1
+		reverse_proxy supabase_auth:9999
+	}
+	handle /rest/v1/* {
+		uri strip_prefix /rest/v1
+		reverse_proxy supabase_rest:3000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

@@ -45,5 +45,16 @@
     "caddy": "TO_BE_FILLED_AT_RELEASE",
     "trustedApi": "TO_BE_FILLED_AT_RELEASE",
     "web": "TO_BE_FILLED_AT_RELEASE"
+  },
+  "awsOnly": {
+    "note": "Optional single-EC2 overlay. Deviates from SOW 018 (managed Supabase and customer AWS).",
+    "region": "us-east-1",
+    "bedrockModel": "amazon.nova-lite-v1:0",
+    "containers": {
+      "supabaseAuth": "supabase/gotrue:v2.197.0",
+      "supabaseRest": "postgrest/postgrest:v16.5",
+      "litellm": "litellm/litellm:v1.108.0",
+      "supabaseDb": "postgres:16.4-alpine"
+    }
   }
 }
