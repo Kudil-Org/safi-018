@@ -1,0 +1,41 @@
+{
+	email {$CADDY_EMAIL}
+}
+
+{$PLATFORM_HOST} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy trusted_api:8080
+	}
+
+	handle /internal/* {
+		respond "Not found" 404
+	}
+
+	handle /wm/* {
+		uri strip_prefix /wm
+		reverse_proxy windmill_server:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
+
+{$WINDMILL_HOST} {
+	reverse_proxy windmill_server:8000
+}
+
+{$BOOKING_HOST} {
+	reverse_proxy calnode:3000
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@safi/trusted-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SOW 018 trusted operations API: Supabase session verification, Windmill token issue, Calnode proxy, Artifact mutation boundary.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
+    "cors": "2.8.6",
+    "dotenv": "17.2.3",
+    "express": "5.3.0",
+    "jose": "6.2.15",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "@types/node": "24.10.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "release": "0.1.0",
+  "sow": "SAFI-SERVICE-SOW-018",
+  "note": "Container tags stay pinned. Record immutable sha256 digests with scripts/pin-digests.sh before release. :latest is forbidden.",
+  "spa": {
+    "node": "22.12.0",
+    "npm": "10.9.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "vite": "8.3.5",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "5.9.3",
+    "ai": "7.0.159",
+    "@assistant-ui/react": "0.15.32",
+    "@windmill-labs/chat-sdk": "1.855.1",
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "trustedApi": {
+    "node": "22.12.0",
+    "express": "5.3.0",
+    "cors": "2.8.6",
+    "jose": "6.2.15",
+    "zod": "4.6.7",
+    "dotenv": "17.2.3",
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "tests": {
+    "node": "22.12.0",
+    "@playwright/test": "1.64.1",
+    "@supabase/supabase-js": "2.118.0",
+    "dotenv": "18.0.9"
+  },
+  "containers": {
+    "windmill": "ghcr.io/windmill-labs/windmill:1.855.1",
+    "windmillPostgres": "postgres:16.4-alpine",
+    "calnode": "ghcr.io/calnode/calnode:0.12.0",
+    "caddy": "caddy:2.8.4-alpine",
+    "trustedApi": "safi/trusted-api:0.1.0",
+    "web": "safi/web:0.1.0"
+  },
+  "digests": {
+    "windmill": "TO_BE_FILLED_AT_RELEASE",
+    "windmillPostgres": "TO_BE_FILLED_AT_RELEASE",
+    "calnode": "TO_BE_FILLED_AT_RELEASE",
+    "caddy": "TO_BE_FILLED_AT_RELEASE",
+    "trustedApi": "TO_BE_FILLED_AT_RELEASE",
+    "web": "TO_BE_FILLED_AT_RELEASE"
+  }
+}

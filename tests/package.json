@@ -1,0 +1,20 @@
+{
+  "name": "@safi/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SOW 018 acceptance and security tests. No mocks: these run against the deployed platform and managed Supabase project.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test:security": "node security/rls.mjs",
+    "test:e2e": "playwright test",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@supabase/supabase-js": "2.118.0",
+    "dotenv": "18.0.9"
+  }
+}

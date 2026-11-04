@@ -1,0 +1,443 @@
+openapi: 3.1.0
+info:
+  title: SAFI Trusted API
+  version: 0.1.0
+  description: >-
+    Smallest trusted-operations contract for SAFI Service SOW 018. Browser callers
+    authenticate with a Supabase bearer token. Windmill tools authenticate with the
+    internal service token and a signed SAFI context. Privileged credentials never
+    enter the browser.
+servers:
+  - url: https://platform.example.com/api
+    description: Public platform origin
+security:
+  - supabaseSession: []
+paths:
+  /healthz:
+    get:
+      security: []
+      operationId: healthz
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, release, service]
+                properties:
+                  status: { type: string, const: ok }
+                  release: { type: string }
+                  service: { type: string, const: safi-trusted-api }
+  /config:
+    get:
+      security: []
+      operationId: getConfig
+      responses:
+        "200":
+          description: Non-secret browser bootstrap configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformConfig"
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        "200":
+          description: Verified Supabase user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+  /chat-session:
+    get:
+      operationId: getChatSession
+      responses:
+        "200":
+          description: >-
+            Windmill chat coordinates and a short-lived signed SAFI context. The
+            shared Windmill chat token is never returned; chat traffic goes through
+            /api/w/{workspace}/* where the trusted API injects it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSession"
+  /artifacts:
+    get:
+      operationId: listArtifacts
+      responses:
+        "200":
+          description: Artifacts owned by the caller
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  artifacts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Artifact"
+    post:
+      operationId: createArtifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                  default: Meeting checklist
+      responses:
+        "201":
+          description: Artifact created with version 1
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactBundle"
+  /artifacts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    get:
+      operationId: getArtifact
+      responses:
+        "200":
+          description: Artifact and immutable versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactBundle"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /artifacts/{id}/mutate:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    post:
+      operationId: mutateArtifact
+      description: Owner-only optimistic-concurrency mutation through safi_mutate_artifact.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion, mutation]
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                mutation:
+                  $ref: "#/components/schemas/ArtifactMutation"
+      responses:
+        "200":
+          description: Updated Artifact and history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactBundle"
+        "409":
+          description: Version conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /artifacts/{id}/slots:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    get:
+      operationId: getSlots
+      description: Real Calnode availability for an owned Artifact.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: tz
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Calnode slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlotsResponse"
+  /artifacts/{id}/book:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    post:
+      operationId: bookApprovedSlot
+      description: >-
+        Creates at most one Calnode booking after explicit UI approval. Reuses the
+        existing booking for the Artifact when present.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startAt, timezone, name, email, approved]
+              properties:
+                startAt: { type: string, format: date-time }
+                timezone: { type: string, maxLength: 80 }
+                name: { type: string, maxLength: 160 }
+                email: { type: string, format: email, maxLength: 200 }
+                approved: { type: boolean, const: true }
+      responses:
+        "200":
+          description: Existing booking reused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingResponse"
+        "201":
+          description: Booking created and recorded in Artifact history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingResponse"
+        "409":
+          description: Slot taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /w/{workspace}/{path}:
+    parameters:
+      - name: workspace
+        in: path
+        required: true
+        schema: { type: string }
+      - name: path
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: windmillProxyGet
+      description: >-
+        Server-side Windmill proxy used by the chat SDK. The caller's Supabase
+        session is verified, then the trusted API injects a single-flow Windmill
+        token. Only chat/job/conversation endpoints are allowed.
+      responses:
+        "200": { description: Upstream Windmill response }
+    post:
+      operationId: windmillProxyPost
+      description: Server-side Windmill proxy POST (start a chat turn).
+      responses:
+        "200": { description: Upstream Windmill response }
+    delete:
+      operationId: windmillProxyDelete
+      description: Server-side Windmill proxy DELETE (delete a conversation).
+      responses:
+        "200": { description: Upstream Windmill response }
+components:
+  securitySchemes:
+    supabaseSession:
+      type: http
+      scheme: bearer
+      bearerFormat: Supabase JWT
+  parameters:
+    ArtifactId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    NotFound:
+      description: Not found for this owner
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    PlatformConfig:
+      type: object
+      required: [supabaseUrl, supabaseAnonKey, platformUrl, release, eventSlug, timezone]
+      properties:
+        supabaseUrl: { type: string, format: uri }
+        supabaseAnonKey: { type: string }
+        platformUrl: { type: string, format: uri }
+        release: { type: string }
+        eventSlug: { type: string }
+        timezone: { type: string }
+    User:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: [string, "null"], format: email }
+    ChatSession:
+      type: object
+      required: [baseUrl, workspace, flowPath, context, contextExpiresAt, eventSlug, timezone]
+      properties:
+        baseUrl: { type: string }
+        workspace: { type: string }
+        flowPath: { type: string }
+        context:
+          type: string
+          description: Short-lived signed SAFI context JWT passed to the Flow tools.
+        contextExpiresAt: { type: string, format: date-time }
+        eventSlug: { type: string }
+        timezone: { type: string }
+    ChecklistItem:
+      type: object
+      required: [id, text, done, updatedAt]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        done: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    BookingRef:
+      type: object
+      required: [id, eventTypeSlug, startAt, endAt, timezone]
+      properties:
+        id: { type: string }
+        eventTypeSlug: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        timezone: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+    ChecklistState:
+      type: object
+      required: [kind, title, items]
+      properties:
+        kind: { type: string, const: checklist }
+        title: { type: string }
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ChecklistItem"
+        booking:
+          $ref: "#/components/schemas/BookingRef"
+    Artifact:
+      type: object
+      required: [id, owner_id, template_ref, state, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        template_ref: { type: string }
+        state:
+          $ref: "#/components/schemas/ChecklistState"
+        version: { type: integer, minimum: 1 }
+        booking_id: { type: [string, "null"] }
+        booking_start_at: { type: [string, "null"], format: date-time }
+        booking_timezone: { type: [string, "null"] }
+        event_type_slug: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ArtifactVersion:
+      type: object
+      required: [id, artifact_id, version, state, mutation, created_by, created_at]
+      properties:
+        id: { type: integer }
+        artifact_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        state:
+          $ref: "#/components/schemas/ChecklistState"
+        mutation: { type: object, additionalProperties: true }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    ArtifactBundle:
+      type: object
+      required: [artifact, versions]
+      properties:
+        artifact:
+          $ref: "#/components/schemas/Artifact"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactVersion"
+    ArtifactMutation:
+      oneOf:
+        - type: object
+          required: [op, text]
+          properties:
+            op: { type: string, const: add_item }
+            text: { type: string, maxLength: 300 }
+            id: { type: string, maxLength: 80 }
+        - type: object
+          required: [op, itemId, text]
+          properties:
+            op: { type: string, const: edit_item }
+            itemId: { type: string }
+            text: { type: string, maxLength: 300 }
+        - type: object
+          required: [op, itemId, done]
+          properties:
+            op: { type: string, const: set_item_done }
+            itemId: { type: string }
+            done: { type: boolean }
+        - type: object
+          required: [op, itemId]
+          properties:
+            op: { type: string, const: remove_item }
+            itemId: { type: string }
+        - type: object
+          required: [op, title]
+          properties:
+            op: { type: string, const: set_title }
+            title: { type: string, maxLength: 200 }
+        - type: object
+          required: [op, booking]
+          properties:
+            op: { type: string, const: set_booking }
+            booking:
+              $ref: "#/components/schemas/BookingRef"
+    Slot:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        host_ids:
+          type: array
+          items: { type: string }
+    SlotsResponse:
+      type: object
+      required: [eventTypeSlug, timezone, slots, degraded, source]
+      properties:
+        eventTypeSlug: { type: string }
+        timezone: { type: string }
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Slot"
+        degraded: { type: boolean }
+        source: { type: string, const: calnode }
+    BookingResponse:
+      type: object
+      required: [booking, artifact, versions, reused]
+      properties:
+        booking:
+          $ref: "#/components/schemas/BookingRef"
+        artifact:
+          $ref: "#/components/schemas/Artifact"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactVersion"
+        reused: { type: boolean }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: {}

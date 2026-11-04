@@ -1,0 +1,77 @@
+# SAFI Platform v0.1 - NON-SECRET deployment configuration
+# Actual resource names and endpoints. No credentials, tokens or keys belong here.
+
+release: "0.1.0"
+sow: "SAFI-SERVICE-SOW-018"
+copyright: "Proprietary and Copyright 2026 B. Gopinath"
+
+urls:
+  platform: "https://platform.example.com"
+  windmill_direct: "https://wm.example.com"
+  windmill_chat_proxy: "https://platform.example.com/api/w"
+  booking_admin: "https://booking.example.com"
+
+supabase:
+  project_ref: "YOUR-PROJECT"
+  auth: "email-password"
+  tables:
+    artifacts: "public.artifacts"
+    artifact_versions: "public.artifact_versions"
+  rpc:
+    mutate: "public.safi_mutate_artifact"
+  storage: "not used by this pilot"
+
+windmill:
+  workspace: "safi"
+  flow_path: "f/safi/safi_assistant"
+  chat_mode: true
+  postgres: "windmill_postgres (dedicated database, persistent volume)"
+  resources:
+    llm: "f/safi/llm"
+  variables:
+    event_slug: "f/safi/calnode_event_slug"
+  flow_env:
+    SAFI_API_URL: "http://trusted_api:8080"
+    SAFI_INTERNAL_TOKEN: "injected from the Windmill worker environment; never in this file"
+
+calnode:
+  base_url: "http://calnode:3000"
+  public_url: "https://booking.example.com"
+  database: "sqlite:///data/calnode.db"
+  persistent_volume: "calnode_data"
+  event_type_slug: "follow-up-30"
+  event_duration_minutes: 30
+  availability: "weekdays 09:00-17:00 in the workspace host timezone"
+
+trusted_api:
+  port: 8080
+  public_paths:
+    - "/api/healthz"
+    - "/api/config"
+    - "/api/chat-session"
+    - "/api/me"
+    - "/api/artifacts"
+    - "/api/artifacts/{id}"
+    - "/api/artifacts/{id}/mutate"
+    - "/api/artifacts/{id}/slots"
+    - "/api/artifacts/{id}/book"
+    - "/api/w/{workspace}/*"
+  internal_paths_not_public:
+    - "/internal/verify"
+    - "/internal/context"
+    - "/internal/artifacts"
+    - "/internal/artifacts/{id}/mutate"
+    - "/internal/calnode/slots"
+    - "/internal/calnode/book"
+
+artifact:
+  template_ref: "checklist.v1"
+  state_kind: "checklist"
+  versioning: "monotonic integer, immutable append-only history"
+
+exclusions:
+  customer_aws: false
+  vercel: false
+  n8n: false
+  kubernetes: false
+  new_load_balancer: false

@@ -1,0 +1,127 @@
+name: safi-service-018
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  windmill_db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: windmill
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${WINDMILL_POSTGRES_PASSWORD:?set WINDMILL_POSTGRES_PASSWORD}
+    volumes:
+      - windmill_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d windmill"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  windmill_server:
+    image: ghcr.io/windmill-labs/windmill:1.855.1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:${WINDMILL_POSTGRES_PASSWORD}@windmill_db:5432/windmill?sslmode=disable
+      MODE: server
+      BASE_URL: https://${WINDMILL_HOST}
+    depends_on:
+      windmill_db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    volumes:
+      - windmill_worker_logs:/tmp/windmill/logs
+    logging: *default-logging
+
+  windmill_worker:
+    image: ghcr.io/windmill-labs/windmill:1.855.1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:${WINDMILL_POSTGRES_PASSWORD}@windmill_db:5432/windmill?sslmode=disable
+      MODE: worker
+      WORKER_GROUP: default
+      DISABLE_NSJAIL: "true"
+      SAFI_API_URL: http://trusted_api:8080
+      SAFI_INTERNAL_TOKEN: ${SAFI_INTERNAL_TOKEN:?set SAFI_INTERNAL_TOKEN}
+    depends_on:
+      windmill_db:
+        condition: service_healthy
+      windmill_server:
+        condition: service_started
+    volumes:
+      - windmill_worker_cache:/tmp/windmill/cache
+      - windmill_worker_logs:/tmp/windmill/logs
+    logging: *default-logging
+
+  calnode:
+    image: ghcr.io/calnode/calnode:0.12.0
+    restart: unless-stopped
+    environment:
+      BASE_URL: https://${BOOKING_HOST}
+      DATABASE_URL: sqlite:///data/calnode.db
+      CALNODE_ENCRYPTION_KEY: ${CALNODE_ENCRYPTION_KEY:?set CALNODE_ENCRYPTION_KEY}
+      CALNODE_RECOVERY_SECRET: ${CALNODE_RECOVERY_SECRET:?set CALNODE_RECOVERY_SECRET}
+      PORT: "3000"
+    volumes:
+      - calnode_data:/data
+    expose:
+      - "3000"
+    logging: *default-logging
+
+  trusted_api:
+    build:
+      context: ./services/trusted-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      WINDMILL_INTERNAL_BASE_URL: http://windmill_server:8000
+      CALNODE_BASE_URL: http://calnode:3000
+      CORS_ORIGINS: https://${PLATFORM_HOST}
+    depends_on:
+      windmill_server:
+        condition: service_started
+      calnode:
+        condition: service_started
+    expose:
+      - "8080"
+    logging: *default-logging
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/edge/Dockerfile
+    restart: unless-stopped
+    environment:
+      PLATFORM_HOST: ${PLATFORM_HOST:?set PLATFORM_HOST}
+      WINDMILL_HOST: ${WINDMILL_HOST:?set WINDMILL_HOST}
+      BOOKING_HOST: ${BOOKING_HOST:?set BOOKING_HOST}
+      CADDY_EMAIL: ${CADDY_EMAIL:?set CADDY_EMAIL}
+    depends_on:
+      trusted_api:
+        condition: service_healthy
+      windmill_server:
+        condition: service_started
+      calnode:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *default-logging
+
+volumes:
+  windmill_db_data:
+  windmill_worker_cache:
+  windmill_worker_logs:
+  calnode_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,19 @@
+{
+  "name": "@safi/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SOW 018 provisioning, fixture, digest-pinning, release-check and evidence scripts. No runtime dependencies.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "check:pins": "node check-pins.mjs",
+    "check:release": "node check-pins.mjs --release",
+    "seed:supabase": "node seed-supabase.mjs",
+    "fixture:create": "node create-conflicting-fixture.mjs",
+    "fixture:verify": "node verify-conflicting-fixture.mjs",
+    "pin:digests": "node pin-digests.mjs",
+    "evidence:capture": "node capture-evidence.mjs"
+  }
+}
